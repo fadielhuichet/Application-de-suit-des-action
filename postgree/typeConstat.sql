@@ -1,0 +1,4 @@
+CREATE TABLE Type_Constat(
+	id SERIAL PRIMARY KEY,
+	designation VARCHAR(100) NOT NULL
+);
