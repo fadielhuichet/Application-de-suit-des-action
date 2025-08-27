@@ -1,11 +1,15 @@
 <?php
-ini_set('display_errors', 0);
+// Enable error reporting for debugging (disable in production)
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
-header("Content-Type: application/json; charset=UTF-8");
+
+// Set CORS headers
 header("Access-Control-Allow-Origin: http://localhost:3000");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Max-Age: 86400"); // Cache preflight for 24 hours
 
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
@@ -16,17 +20,19 @@ $dbname = "Suit_Action";
 $user = "postgres";
 $password = "fedi1234";
 
-$conn = pg_connect("host=$host dbname=$dbname user=$user password=$password");
+$conn = pg_connect("host=$host port=5432 dbname=$dbname user=$user password=$password");
+
 if (!$conn) {
     http_response_code(500);
-    echo json_encode(["success" => false, "message" => "Connexion échouée"]);
+    echo json_encode(["success" => false, "message" => "Database connection failed", "error" => pg_last_error()]);
     exit;
 }
+
 
 $data = json_decode(file_get_contents("php://input"), true);
 if (!$data || !isset($data["login"]) || !isset($data["nom"]) || !isset($data["prenom"]) || !isset($data["role"])) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Données invalides"]);
+    echo json_encode(["success" => false, "message" => "Invalid data"]);
     exit;
 }
 
@@ -35,13 +41,12 @@ $nom = $data["nom"];
 $prenom = $data["prenom"];
 $role = $data["role"];
 $mot_de_passe = $data["mot_de_passe"] ?? null;
-$poste = $data["poste"] ?? null;
 
 $checkUserQuery = "SELECT id FROM users WHERE login = $1 LIMIT 1";
 $checkUserResult = pg_query_params($conn, $checkUserQuery, [$login]);
 if (!$checkUserResult || pg_num_rows($checkUserResult) === 0) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Utilisateur non trouvé"]);
+    echo json_encode(["success" => false, "message" => "User not found"]);
     exit;
 }
 
@@ -56,22 +61,16 @@ if (!empty($mot_de_passe)) {
     $paramIndex++;
 }
 
-if (!empty($poste)) {
-    $query .= ", poste = $" . $paramIndex;
-    $params[] = $poste;
-    $paramIndex++;
-}
-
 $query .= " WHERE login = $" . $paramIndex;
 $params[] = $login;
 
 $result = pg_query_params($conn, $query, $params);
 
 if ($result) {
-    echo json_encode(["success" => true, "message" => "Profil mis à jour avec succès"]);
+    echo json_encode(["success" => true, "message" => "Profile updated successfully"]);
 } else {
     http_response_code(500);
-    echo json_encode(["success" => false, "message" => "Erreur lors de la mise à jour", "error" => pg_last_error($conn)]);
+    echo json_encode(["success" => false, "message" => "Update failed", "error" => pg_last_error($conn)]);
 }
 
 pg_close($conn);
